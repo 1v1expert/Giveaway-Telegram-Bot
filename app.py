@@ -1,0 +1,78 @@
+from telebot import TeleBot
+
+from config import TELEGRAM_TOKEN, CHAT_ID
+
+# proxy settings
+from telebot import apihelper
+
+# apihelper.proxy = {'http': 'http://45.55.53.22844578'}
+
+bot = TeleBot(TELEGRAM_TOKEN)
+
+user_dict = dict()
+
+
+class Request:
+    def __init__(self, chat_id):
+        self.chat_id = chat_id
+        self.user_id = None
+        self.datetime = None
+        self.username = None
+        self.email = None
+        
+    def find_email(self):
+        pass
+    
+    def save(self):
+        pass
+    
+    def is_subscriber(self) -> bool:
+        if bot.get_chat_member(CHAT_ID, self.user_id).status in ['creator', 'administrator', 'member']:
+            return True
+        else:
+            return False
+
+
+@bot.message_handler(commands=['help', 'start'])
+def send_welcome(message):
+    msg = bot.reply_to(message, "Привет, гнидочка, chat_id: {}".format(message.chat.id))
+    # print(vars(message),'\n', vars(message.from_user), '\n', vars(message.chat))
+    # print(bot.get_chat_member(message.chat.id, message.chat.id))
+
+
+@bot.message_handler(commands=['giveaway_command'])
+def init_chat(message):
+    markdown = """
+    Greetings!
+    To participate in giveaway, please let us know your email you used to sign up at the website.
+    In case you don’t have an account at the website, please [Sign Up for free here](http://google.com)
+    """
+    msg = bot.reply_to(message, markdown, parse_mode="Markdown")
+    bot.register_next_step_handler(msg, mail_processing)
+
+
+def mail_processing(message):
+        chat_id = message.chat.id
+        email = message.text
+        if '@' not in email:
+            msg = bot.reply_to(message, 'That does not look like an email. Please input full email you used to sign up '
+                                        'at the website.')
+            bot.register_next_step_handler(msg, mail_processing)
+        else:
+            request = Request(chat_id)
+            user_dict[chat_id] = request
+            request.email = email
+            request.user_id = message.from_user.id
+            if not request.is_subscriber():
+                msg = bot.reply_to(message, 'You need to be subscribed to our official Channel. '
+                                            'Please click the link and join the Channel to be able to participate into '
+                                            'our giveaway. ')
+                bot.register_next_step_handler(msg, mail_processing)
+            
+            request.save()
+
+
+bot.load_next_step_handlers()
+bot.polling()
+
+# https://t.me/proxy?server=ru.tgproxy.today&port=8080&secret=ddfb175d6d7f820cdc73ab11edbdcdbd74
