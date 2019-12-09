@@ -1,4 +1,5 @@
 from telebot import TeleBot
+from telebot import apihelper
 
 from config import TELEGRAM_TOKEN, CHAT_ID
 
@@ -11,8 +12,6 @@ import uuid
 import re
 
 # proxy settings
-from telebot import apihelper
-
 # apihelper.proxy = {'http': 'http://45.55.53.22844578'}
 
 bot = TeleBot(TELEGRAM_TOKEN)
@@ -21,6 +20,8 @@ user_dict = dict()
 
 # for check email validity
 regex = '^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$'
+
+FILENAME = 'output.csv'
 
 
 class Request:
@@ -31,29 +32,39 @@ class Request:
         self.datetime = None
         self.username = None
         self.email = None
+        self.user_info = None
         
     def find_email(self):
-        pass
-    
+        """Read a csv file"""
+        try:
+            with open(FILENAME, "r") as f_obj:
+                reader = csv.reader(f_obj)
+                for row in reader:
+                    info = row[0].split(';')
+                    if info[4] == self.email:
+                        self.user_info = info
+                        return True
+            return False
+        except FileNotFoundError:
+            return False
+        
     def save(self):
         self.datetime = datetime.now()
 
-        with open('data.csv', "a", newline='') as csv_file:
+        with open(FILENAME, "a", newline='') as csv_file:
             writer = csv.writer(csv_file, delimiter=';')
             writer.writerow([self.uuid, self.user_id, self.datetime.strftime('%Y-%m-%d %H:%M'), self.username, self.email])
     
     def is_subscriber(self) -> bool:
-        if bot.get_chat_member(CHAT_ID, self.user_id).status in ['creator', 'administrator', 'member']:
+        try:
+            status = bot.get_chat_member(CHAT_ID, self.user_id).status
+        except apihelper.ApiException:
+            status = 'undefined'
+            
+        if status in ['creator', 'administrator', 'member']:
             return True
         else:
             return False
-
-
-@bot.message_handler(commands=['help', 'start'])
-def send_welcome(message):
-    msg = bot.reply_to(message, "Привет, гнидочка, chat_id: {}".format(message.chat.id))
-    # print(vars(message),'\n', vars(message.from_user), '\n', vars(message.chat))
-    # print(bot.get_chat_member(message.chat.id, message.chat.id))
 
 
 @bot.message_handler(commands=['giveaway_command'])
@@ -83,14 +94,31 @@ def mail_processing(message):
             if not request.is_subscriber():
                 msg = bot.reply_to(message, 'You need to be subscribed to our official [Channel](http://google.com) '
                                             'Please click the link and join the Channel to be able to participate into '
-                                            'our giveaway. ')
+                                            'our giveaway. ', parse_mode="Markdown")
                 bot.register_next_step_handler(msg, mail_processing)
+                return
 
-            bot.reply_to(message, 'Thnx, bro')
-            request.save()
+            if request.find_email():
+                if request.user_id == request.user_info[1]:
+                    bot.reply_to(message,
+                                 'Oh-oh, it seems like you have already participated in this giveaway by entering '
+                                 'this email. To keep the giveaway fair, we accept only one user account. '
+                                 'You can always participate in other giveaways. To do so, just stay up to date '
+                                 'with our [Channel](http://google.com)', parse_mode="Markdown")
+                else: # another user
+                    bot.reply_to(message,
+                                 'Oh-oh, it seems like you have already participated in this giveaway by entering '
+                                 'this email. To keep the giveaway fair, we accept only one user account. '
+                                 'You can always participate in other giveaways. To do so, just stay up to date '
+                                 'with our [Channel](http://google.com)', parse_mode="Markdown")
+                    # bot.register_next_step_handler(msg, mail_processing)
+            else:
+                bot.reply_to(message, 'Thnx, bro')
+                request.save()
 
 
-# bot.load_next_step_handlers()
+bot.enable_save_next_step_handlers(delay=2)
+bot.load_next_step_handlers()
 bot.polling()
 
 # https://t.me/proxy?server=ru.tgproxy.today&port=8080&secret=ddfb175d6d7f820cdc73ab11edbdcdbd74

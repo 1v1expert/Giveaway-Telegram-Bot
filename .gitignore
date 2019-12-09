@@ -12,6 +12,12 @@ __pycache__/
 # Config files
 config.py
 
+#Handlers
+.handler-saves/
+
+#Output files
+output.csv
+
 # Distribution / packaging
 .Python
 build/
